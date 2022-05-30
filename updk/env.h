@@ -1,7 +1,7 @@
 #ifndef __UPDK_ENV_H__
 #define __UPDK_ENV_H__
 
-#include "linux/list.h"
+#include "list.h"
 
 #include <netinet/in.h>
 

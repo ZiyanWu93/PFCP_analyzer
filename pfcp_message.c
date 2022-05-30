@@ -348,9 +348,9 @@ Status PfcpBuildMessage(Bufblk **bufBlkPtr, PfcpMessage *pfcpMessage) {
 //        case PFCP_ASSOCIATION_SETUP_REQUEST:
 //            _PfcpBuildBody(bufBlkPtr, &pfcpMessage->pFCPAssociationSetupRequest, &ieDescriptionTable[PFCP_ASSOCIATION_SETUP_REQUEST + 155]);
 //            break;
-//        case PFCP_ASSOCIATION_SETUP_RESPONSE:
-//            _PfcpBuildBody(bufBlkPtr, &pfcpMessage->pFCPAssociationSetupResponse, &ieDescriptionTable[PFCP_ASSOCIATION_SETUP_RESPONSE + 155]);
-//            break;
+        case PFCP_ASSOCIATION_SETUP_RESPONSE:
+            _PfcpBuildBody(bufBlkPtr, &pfcpMessage->pFCPAssociationSetupResponse, &ieDescriptionTable[PFCP_ASSOCIATION_SETUP_RESPONSE + 155]);
+            break;
 //        case PFCP_ASSOCIATION_UPDATE_REQUEST:
 //            _PfcpBuildBody(bufBlkPtr, &pfcpMessage->pFCPAssociationUpdateRequest, &ieDescriptionTable[PFCP_ASSOCIATION_UPDATE_REQUEST + 155]);
 //            break;
@@ -383,12 +383,12 @@ Status PfcpBuildMessage(Bufblk **bufBlkPtr, PfcpMessage *pfcpMessage) {
         case PFCP_SESSION_ESTABLISHMENT_RESPONSE:
             _PfcpBuildBody(bufBlkPtr, &pfcpMessage->pFCPSessionEstablishmentResponse, &ieDescriptionTable[PFCP_SESSION_ESTABLISHMENT_RESPONSE + 155 - (50-15) - 1]);
             break;
-//        case PFCP_SESSION_MODIFICATION_REQUEST:
-//            _PfcpBuildBody(bufBlkPtr, &pfcpMessage->pFCPSessionModificationRequest, &ieDescriptionTable[PFCP_SESSION_MODIFICATION_REQUEST + 155 - (50-15) - 1]);
-//            break;
-//        case PFCP_SESSION_MODIFICATION_RESPONSE:
-//            _PfcpBuildBody(bufBlkPtr, &pfcpMessage->pFCPSessionModificationResponse, &ieDescriptionTable[PFCP_SESSION_MODIFICATION_RESPONSE + 155 - (50-15) - 1]);
-//            break;
+        case PFCP_SESSION_MODIFICATION_REQUEST:
+            _PfcpBuildBody(bufBlkPtr, &pfcpMessage->pFCPSessionModificationRequest, &ieDescriptionTable[PFCP_SESSION_MODIFICATION_REQUEST + 155 - (50-15) - 1]);
+            break;
+        case PFCP_SESSION_MODIFICATION_RESPONSE:
+            _PfcpBuildBody(bufBlkPtr, &pfcpMessage->pFCPSessionModificationResponse, &ieDescriptionTable[PFCP_SESSION_MODIFICATION_RESPONSE + 155 - (50-15) - 1]);
+            break;
 //        case PFCP_SESSION_DELETION_REQUEST:
 //            _PfcpBuildBody(bufBlkPtr, &pfcpMessage->pFCPSessionDeletionRequest, &ieDescriptionTable[PFCP_SESSION_DELETION_REQUEST + 155 - (50-15) - 1]);
 //            break;

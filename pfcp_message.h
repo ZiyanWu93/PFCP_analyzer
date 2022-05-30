@@ -845,7 +845,7 @@ typedef struct _PfcpMessage {
 //        PFCPPFDManagementRequest pFCPPFDManagementRequest;
 //        PFCPPFDManagementResponse pFCPPFDManagementResponse;
 //        PFCPAssociationSetupRequest pFCPAssociationSetupRequest;
-//        PFCPAssociationSetupResponse pFCPAssociationSetupResponse;
+        PFCPAssociationSetupResponse pFCPAssociationSetupResponse;
 //        PFCPAssociationUpdateRequest pFCPAssociationUpdateRequest;
 //        PFCPAssociationUpdateResponse pFCPAssociationUpdateResponse;
 //        PFCPAssociationReleaseRequest pFCPAssociationReleaseRequest;
@@ -857,8 +857,8 @@ typedef struct _PfcpMessage {
         PFCPSessionEstablishmentRequest pFCPSessionEstablishmentRequest;
 
         PFCPSessionEstablishmentResponse pFCPSessionEstablishmentResponse;
-//        PFCPSessionModificationRequest pFCPSessionModificationRequest;
-//        PFCPSessionModificationResponse pFCPSessionModificationResponse;
+        PFCPSessionModificationRequest pFCPSessionModificationRequest;
+        PFCPSessionModificationResponse pFCPSessionModificationResponse;
 //        PFCPSessionDeletionRequest pFCPSessionDeletionRequest;
 //        PFCPSessionDeletionResponse pFCPSessionDeletionResponse;
 //        PFCPSessionReportRequest pFCPSessionReportRequest;

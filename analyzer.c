@@ -4,6 +4,7 @@
 #include "netinet/in.h"
 #include "updk/rule_far.h"
 #include "n4_pfcp_handler.h"
+#include "updk/env.h"
 
 static IeDescription ieDescriptionTable[] = {\
 {0, sizeof(Reserved), 1, 0,
@@ -738,7 +739,7 @@ size_t ReadHexFile(FILE *inf, unsigned char *dest) {
 
 int main() {
     BufblkPoolInit();
-    FILE *inf = fopen("../request.txt", "r");
+    FILE *inf = fopen("../modification_request.txt", "r");
     size_t n = ReadHexFile(inf, NULL);
     rewind(inf);
     unsigned char *buf = malloc(n);
@@ -764,17 +765,107 @@ int main() {
     }
     hexDump("PfcpHeader", pfcpHeader, size, 16);
     void *pfcp_payload;
-    int buffOffset = 0; // buff offset
-    PfcpMessage *pfcpMessage = malloc(sizeof(PfcpMessage));
+    PfcpFSeid fSeid;
+    Bufblk *bufBlk = NULL;
+    DNN dnn1;
+    strcpy(dnn1.name, "internet");
+    printf("dnn name %s\n", dnn1.name);
+    IeDescription *msgDes;
+    PFCPSessionEstablishmentRequest *request;
+    int len;
+    Status status;
+    PfcpHeader header;
+    struct _PfcpHeader pfcpHeader_resonse;
     switch (pfcpHeader->type) {
+        case PFCP_ASSOCIATION_SETUP_REQUEST:
+            pfcp_payload = (void *) pfcpHeader + size;
+            /* Send */
+            memset(&header, 0, sizeof(PfcpHeader));
+            header.type = PFCP_ASSOCIATION_SETUP_RESPONSE;
+            header.seid = 0;
+
+            PfcpMessage pfcpMessage;
+            PFCPAssociationSetupResponse *response = NULL;
+            uint8_t cause;
+            uint16_t upFunctionFeature;
+
+            response = &pfcpMessage.pFCPAssociationSetupResponse;
+            memset(&pfcpMessage, 0, sizeof(PfcpMessage));
+            pfcpMessage.pFCPAssociationSetupResponse.presence = 1;
+
+            /* node id */
+            // TODO: IPv6
+            response->nodeID.presence = 1;
+            PfcpNodeId nodeId;
+            nodeId.spare = 0;
+            nodeId.type = PFCP_NODE_ID_IPV4;
+            nodeId.addr4.s_addr = ipv4Hdr->dst_addr; // check, should be the ip address of the UPF
+            response->nodeID.len = 1 + 4;
+            response->nodeID.value = &nodeId;
+
+            /* cause */
+            cause = PFCP_CAUSE_REQUEST_ACCEPTED;
+            response->cause.presence = 1;
+            response->cause.value = &cause;
+            response->cause.len = 1;
+
+            uint32_t recovery_time = 0x1b338762;
+            /* Recovery Time Stamp */
+            response->recoveryTimeStamp.presence = 1;
+            response->recoveryTimeStamp.value = &recovery_time;
+            response->recoveryTimeStamp.len = 4;
+
+            // TODO: support UP Function Feature report
+            /* UP Function Feature (Condition) */
+            upFunctionFeature = 0;
+            if (upFunctionFeature) {
+                response->uPFunctionFeatures.presence = 1;
+                response->uPFunctionFeatures.value = &upFunctionFeature;
+                response->uPFunctionFeatures.len = 2;
+            } else {
+                response->uPFunctionFeatures.presence = 0;
+            }
+
+            PfcpUserPlaneIpResourceInformation upIpResourceInformation;
+            memset(&upIpResourceInformation, 0,
+                   sizeof(PfcpUserPlaneIpResourceInformation));
+
+            // teid
+            upIpResourceInformation.teidri = 1;
+            upIpResourceInformation.teidRange = 0;
+
+            // network instence
+            upIpResourceInformation.assoni = 1;
+            DNN *dnn = &dnn1;
+            uint8_t dnnLen = 0;
+            dnnLen = strlen(dnn->name);
+            memcpy(upIpResourceInformation.networkInstance, &dnnLen, 1);
+            memcpy(upIpResourceInformation.networkInstance + 1, dnn->name, dnnLen + 1);
+            response->userPlaneIPResourceInformation.presence = 1;
+            response->userPlaneIPResourceInformation.value = &upIpResourceInformation;
+            // TODO: this is only IPv4, no network instence, no source interface
+            response->userPlaneIPResourceInformation.len = 2 + 4 + 1 + dnnLen;
+            // HACK: sizeof(Internet) == 8, hardcord
+            //response->userPlaneIPResourceInformation.len =
+            //sizeof(PfcpUserPlaneIpResourceInformation);
+
+            upIpResourceInformation.addr4.s_addr = 0x6502a8c0;
+            upIpResourceInformation.v4 = 1;
+            pfcpMessage.header.type = PFCP_ASSOCIATION_SETUP_RESPONSE;
+            status = PfcpBuildMessage(&bufBlk, &pfcpMessage);
+//            hexDump("pfcp header built:", &pfcpHeader_resonse, size, 16);
+            hexDump("message built:", bufBlk->buf, bufBlk->len, 16);
+            break;
         case PFCP_SESSION_ESTABLISHMENT_REQUEST:
 //            printf("good");
+
+
             pfcp_payload = (void *) pfcpHeader + size;
 
             hexDump("pfcp_payload", pfcp_payload, n - size, 16);
             // analyze according to the table
-            IeDescription *msgDes = &ieDescriptionTable[PFCP_SESSION_ESTABLISHMENT_REQUEST + 155 - (50 - 15) - 1];
-            PFCPSessionEstablishmentRequest *request = &pfcpMessage->pFCPSessionEstablishmentRequest;
+            msgDes = &ieDescriptionTable[PFCP_SESSION_ESTABLISHMENT_REQUEST + 155 - (50 - 15) - 1];
+            request = &pfcpMessage.pFCPSessionEstablishmentRequest;
 
             _TlvParseMessage((unsigned long *) request + 1, msgDes, pfcp_payload, n - size);
 
@@ -804,60 +895,194 @@ int main() {
                     //use the rule to create PDR
                 }
             }
-
-            Bufblk *bufBlk = NULL;
-            PfcpFSeid *smfFSeid = NULL;
-
             // build response
-            PfcpMessage pfcpMessage;
-            PFCPSessionEstablishmentResponse *response = NULL;
-            PfcpFSeid fSeid;
-            PfcpNodeId nodeId;
 
-            int len;
-
-            response = &pfcpMessage.pFCPSessionEstablishmentResponse;
+            PFCPSessionEstablishmentResponse *pfcpSessionEstablishmentResponse = NULL;
+            pfcpSessionEstablishmentResponse = &(pfcpMessage.pFCPSessionEstablishmentResponse);
             memset(&pfcpMessage, 0, sizeof(pfcpMessage));
-            uint8_t cause = PFCP_CAUSE_REQUEST_ACCEPTED;
+            cause = PFCP_CAUSE_REQUEST_ACCEPTED;
             /* Node Id */
             response->nodeID.presence = 1;
             /* TODO: IPv6 */
             nodeId.type = PFCP_NODE_ID_IPV4;
             nodeId.addr4.s_addr = 0x12345678;
-            response->nodeID.value = &nodeId;
-            response->nodeID.len = 1 + 4;
+            pfcpSessionEstablishmentResponse->nodeID.value = &nodeId;
+            pfcpSessionEstablishmentResponse->nodeID.len = 1 + 4;
 
             /* cause */
-            response->cause.presence = 1;
-            response->cause.len = 1;
-            response->cause.value = &cause;
+            pfcpSessionEstablishmentResponse->cause.presence = 1;
+            pfcpSessionEstablishmentResponse->cause.len = 1;
+            pfcpSessionEstablishmentResponse->cause.value = &cause;
 
             /* Condition or Option */
             if (cause == PFCP_CAUSE_REQUEST_ACCEPTED) {
                 /* F-SEID */
-                response->uPFSEID.presence = 1;
-                response->uPFSEID.value = &fSeid; //
+                pfcpSessionEstablishmentResponse->uPFSEID.presence = 1;
+                pfcpSessionEstablishmentResponse->uPFSEID.value = &fSeid; //
                 fSeid.seid = htobe64(
                         1); // check is this correct,  this fild is upf seid, decided by youre self. Set it to 1 for now
                 fSeid.v4 = 1;
                 fSeid.v6 = 0;
                 fSeid.addr4.s_addr = 0x0800007f; // 127.0.0.1
                 len = PFCP_F_SEID_IPV4_LEN;
-                response->uPFSEID.len = len;
+                pfcpSessionEstablishmentResponse->uPFSEID.len = len;
                 /* FQ-CSID */
             }
 
             pfcpMessage.header.type = PFCP_SESSION_ESTABLISHMENT_RESPONSE;
-            Status status;
             status = PfcpBuildMessage(&bufBlk, &pfcpMessage);
 
-            struct _PfcpHeader pfcpHeader_resonse;
+
             memcpy(&pfcpHeader_resonse, pfcpHeader, size);
             pfcpHeader_resonse.flags = 0x21;
             pfcpHeader_resonse.seid = htobe64(1);
             pfcpHeader_resonse.length = htobe16(PFCP_SEID_LEN + bufBlk->len + 4);
             pfcpHeader_resonse.sqn = pfcpHeader->sqn;
             pfcpHeader_resonse.type = PFCP_SESSION_ESTABLISHMENT_RESPONSE;
+            hexDump("pfcp header built:", &pfcpHeader_resonse, size, 16);
+            hexDump("message built:", bufBlk->buf, bufBlk->len, 16);
+
+//            hexDump("pfcp header + messge");
+            break;
+        case PFCP_SESSION_MODIFICATION_REQUEST:
+            // parse message
+
+            pfcp_payload = (void *) pfcpHeader + size;
+
+            hexDump("pfcp_payload", pfcp_payload, n - size, 16);
+            // analyze according to the table
+            msgDes = &ieDescriptionTable[PFCP_SESSION_MODIFICATION_REQUEST + 155 - (50 - 15) - 1];
+            request = &pfcpMessage.pFCPSessionEstablishmentRequest;
+            _TlvParseMessage((unsigned long *) request + 1, msgDes, pfcp_payload, n - size);
+
+
+//
+//            /* Create FAR */
+//            for (int i = 0; i < sizeof(request->createFAR) / sizeof(CreateFAR); i++) {
+//                if (request->createFAR[i].presence) {
+////                    status = UpfN4HandleCreateFar(&request->createFAR[i]);
+////                    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+////                                "Modification: Create FAR error");
+//                }
+//            }
+//
+////            /* Create QER */
+////            for (int i = 0; i < sizeof(request->createQER) / sizeof(CreateQER); i++) {
+////                if (request->createQER[i].presence) {
+////                    status = UpfN4HandleCreateQer(session, &request->createQER[i]);
+////                    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+////                                "Modification: Create QER error");
+////                }
+////            }
+////
+////            // The order of PDF should be the lastest
+////            /* Create PDR */
+////            for (int i = 0; i < sizeof(request->createPDR) / sizeof(CreatePDR); i++) {
+////                if (request->createPDR[i].presence) {
+////                    status = UpfN4HandleCreatePdr(session, &request->createPDR[i]);
+////                    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+////                                "Modification: Create PDR error");
+////                }
+////            }
+////
+////            /* Update FAR */
+////            for (int i = 0; i < sizeof(request->updateFAR) / sizeof(UpdateFAR); i++) {
+////                if (request->updateFAR[i].presence) {
+////                    UTLT_Assert(request->updateFAR[i].fARID.presence == 1, ,
+////                                "[PFCP] FarId in updateFAR not presence");
+////                    status = UpfN4HandleUpdateFar(session, &request->updateFAR[i]);
+////                    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+////                                "Modification: Update FAR error");
+////                }
+////            }
+////
+////            /* Update QER */
+////            for (int i = 0; i < sizeof(request->updateQER) / sizeof(UpdateQER); i++) {
+////                if (request->updateQER[i].presence) {
+////                    UTLT_Assert(request->updateQER[i].qERID.presence == 1, ,
+////                                "[PFCP] QerId in updateQER not presence");
+////                    status = UpfN4HandleUpdateQer(session, &request->updateQER[i]);
+////                    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+////                                "Modification: Update QER error");
+////                }
+////            }
+////
+////            // The order of PDF should be the lastest
+////            /* Update PDR */
+////            for (int i = 0; i < sizeof(request->updatePDR) / sizeof(UpdatePDR); i++) {
+////                if (request->updatePDR[i].presence) {
+////                    UTLT_Assert(request->updatePDR[i].pDRID.presence == 1, ,
+////                                "[PFCP] PdrId in updatePDR not presence!");
+////                    status = UpfN4HandleUpdatePdr(session, &request->updatePDR[i]);
+////                    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+////                                "Modification: Update PDR error");
+////                }
+////            }
+////
+////            /* Remove FAR */
+////            for (int i = 0; i < sizeof(request->removeFAR) / sizeof(RemoveFAR); i++) {
+////                if (request->removeFAR[i].presence) {
+////                    UTLT_Assert(request->removeFAR[i].fARID.presence == 1, ,
+////                                "[PFCP] FarId in removeFAR not presence");
+////                    status = UpfN4HandleRemoveFar(session, *(uint32_t*)
+////                            request->removeFAR[i].fARID.value);
+////                    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+////                                "Modification: Remove FAR error");
+////                }
+////            }
+////
+////            /* Remove QER */
+////            for (int i = 0; i < sizeof(request->removeQER) / sizeof(RemoveQER); i++) {
+////                if (request->removeQER[i].presence) {
+////                    UTLT_Assert(request->removeQER[i].qERID.presence == 1, ,
+////                                "[PFCP] QerId in removeQER not presence");
+////                    status = UpfN4HandleRemoveQer(session, *(uint32_t*)
+////                            request->removeQER[i].qERID.value);
+////                    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+////                                "Modification: Remove QER error");
+////                }
+////            }
+////
+////            // The order of PDF should be the lastest
+////            /* Remove PDR */
+////            for (int i = 0; i < sizeof(request->removePDR) / sizeof(RemovePDR); i++) {
+////                if (request->removePDR[i].presence) {
+////                    UTLT_Assert(request->removePDR[i].pDRID.presence == 1, ,
+////                                "[PFCP] PdrId in removePDR not presence!");
+////                    status = UpfN4HandleRemovePdr(session, *(uint16_t*)
+////                            request->removePDR[i].pDRID.value);
+////                    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+////                                "Modification: Remove PDR error");
+////                }
+////            }
+////
+            // build response
+            PFCPSessionModificationResponse *pfcpSessionModificationResponseresponse = NULL;
+            pfcpSessionModificationResponseresponse = &pfcpMessage.pFCPSessionModificationResponse;
+            memset(&pfcpMessage, 0, sizeof(pfcpMessage));
+
+            /* cause */
+            pfcpSessionModificationResponseresponse->cause.presence = 1;
+            if (1) {
+                cause = PFCP_CAUSE_REQUEST_ACCEPTED;
+            } else {
+                cause = PFCP_CAUSE_SESSION_CONTEXT_NOT_FOUND;
+            }
+            pfcpSessionModificationResponseresponse->cause.value = &cause;
+            pfcpSessionModificationResponseresponse->cause.len = sizeof(cause);
+            pfcpMessage.header.type = PFCP_SESSION_MODIFICATION_RESPONSE;
+            status = PfcpBuildMessage(&bufBlk, &pfcpMessage);
+
+
+//            memcpy(&pfcpHeader_resonse, pfcpHeader, size);
+            pfcpHeader_resonse.flags = 0x21;
+            pfcpHeader_resonse.seid = htobe64(1);
+            pfcpHeader_resonse.length = htobe16(PFCP_SEID_LEN + bufBlk->len + 4);
+            pfcpHeader_resonse.sqn = pfcpHeader->sqn & 0x00ffffff;
+//            pfcpHeader_resonse.spare0 = 0;
+            pfcpHeader_resonse.type = PFCP_SESSION_MODIFICATION_RESPONSE;
+
+
             hexDump("pfcp header built:", &pfcpHeader_resonse, size, 16);
             hexDump("message built:", bufBlk->buf, bufBlk->len, 16);
             break;
